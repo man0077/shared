@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    description: mindbox-app
+  generation: 1
+  labels:
+    k8s-app: mindbox-app
+  name: mindbox-app
+  namespace: dev
+spec:
+  replicas: 4                      # Делаем 4 пода, которых хватает для пиковой нагрузки
+  revisionHistoryLimit: 30
+  selector:
+    matchLabels:
+      k8s-app: mindbox-app
+  strategy:
+    rollingUpdate:
+      maxSurge: 75%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        description: mindbox-app
+      creationTimestamp: null
+      labels:
+        k8s-app: mindbox-app
+      name: mindbox-app
+    spec:
+      affinity:
+        podAntiAffinity:           # распределим эти поды, так чтобы, несколько реплик не запустились на одной ноде
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: k8s-app
+                operator: In
+                values:
+                - mindbox-app
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - env:
+        - name: Graylog__LogSource
+          value: sandbox dev mindbox-app
+        - name: Graylog__Port
+          value: "12201"
+        - name: Graylog__Host
+          value: graylog
+        image: registry/mindbox-app:1.0.45.9735
+        resources:
+          requests:
+            memory: "128Mi"      # ставим ограничение по памяти всегда ровно в 128Mi 
+            cpu: "100m"          # ставим ограничение по CPU 100 millicores ( 0.1  cpu )
+          limits:
+            cpu: "200m"          # ставим лимит по вревышению CPU , например в 2 раза (тут нужно знать значение сколько требуется "значительно больше ресурсов", чтобы приложение смогло работать, если идет превышение на ограничение запрашиваемых ресурсов cpu)
+        imagePullPolicy: IfNotPresent
+        name: mindbox-app
+        securityContext:
+          privileged: false
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+      - name: registry
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
